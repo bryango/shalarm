@@ -12,7 +12,7 @@ shalarm is a bash script that uses a pre-installed media player to act
 as an alarm clock, by using said media player to play a sound file over
 and over until you crawl out of bed.
 
-NOTE:   All times are in 24-hour format.  Further, you're going to want
+NOTE:   TIME is parsed by GNU "date -d". Further, you're going to want
         to test the program out first with the --test option, to make
         sure that it works; if it doesn't, either install mplayer or
         choose a different media player by editing the config file at
@@ -64,9 +64,6 @@ shalarm 20
 shalarm 2330
     Set the alarm to 11:30 PM
 
-shalarm 07.30
-    Set the alarm to 7:30 AM
-
 shalarm --snooze 300 --timeout 900 07:30
     Same as above, except with both snooze and timeout enabled.  When
     snooze is activated (the first CTRL-C), the alarm will quiet
@@ -92,8 +89,8 @@ If you want to use the FORTUNE option (see the config file), you will
 also need to have the 'fortune' program installed.
 
 .SH BUGS
-Sometimes, if you set the test alarm too close to the next hour, 
-06:59:58 for example, it may activate the test a little too far into 
+Sometimes, if you set the test alarm too close to the next hour,
+06:59:58 for example, it may activate the test a little too far into
 the future (07:01-ish).
 
 Other than that, no idea.  Send 'em to me.
@@ -101,7 +98,7 @@ Other than that, no idea.  Send 'em to me.
 .SH COPYRIGHT
 Copyright \(co 2013-2018 James Hendrie, licensed under the FreeBSD License
 (aka the Simplified BSD License).  See LICENSE.txt for details.
-This is free, open-source software.  You are free to modify and 
+This is free, open-source software.  You are free to modify and
 redistribute it.  There is NO WARRANTY, to the extent permitted by law.
 
 .SH AUTHORS

@@ -161,13 +161,8 @@ function control_c
 function get_current_time
 {
     ##  Get the current time
-    currentTime=$(date +'%-H %-M %-S')
-
-    ##  Cut it up and send it to its proper variables
-    currentHour=$(echo $currentTime | cut -f1 -d' ')
-    currentMinute=$(echo $currentTime | cut -f2 -d' ')
-    currentSecond=$(echo $currentTime | cut -f3 -d' ')
-
+    currentTimeUnix=$(date +%s)
+    currentTime=$(date -d "@$currentTimeUnix" +'%H:%M:%S')
 }
 
 
@@ -179,96 +174,31 @@ function print_time_error
 }
 
 
-##  Get rid of all the crap in the time string (colons, periods, whatever) and
-##  then check to make sure it wasn't just a bunch of characters or whatever
-function parse_alarm_string
-{
-
-    ##  Echo the argument passed, pipe it to 'tr' a bunch of times and delete
-    ##  the characters we don't want
-    alarmString=$(echo $1 | tr -d ':' | tr -d '.' | tr -d '-' | tr -d '/')
-    alarmString=$(echo $alarmString | tr -d '[:alpha:]')
-
-    ##  We purposely remove all numeric digits from the time string and send it
-    ##  to this 'check' variable.  Juuuust to be safe.
-    alarmStringCheck=$(echo $alarmString | tr -d '[:digit:]' | wc -c)
-
-    ##  If there was anything left over in the check variable, that means there
-    ##  were superfluous characters that didn't get cleaned up
-    if [ $alarmStringCheck -ne 1 ]; then
-        print_time_error
-        exit
-    fi
-}
-
-
 ##  We set the alarm time, and also check to make sure that the time string was
 ##  of the proper length.  After that, we double-check the other alarm time
 ##  variables to ensure that those, too, are of proper length
 function set_alarm_time
 {
-    ##  Count the characters in the string that was passed.  Remember that wc -c
-    ##  will result in one character more than there 'actually' are, and I'm too
-    ##  lazy to just subtract one from charCount, so... always add one mentally
-    charCount=$(echo $1 | wc -c)
+    get_current_time
 
-    if [ $charCount == 3 ]; then                ##  Only hour
-        alarmHour=$1
-        alarmMinute="00"
-        alarmSecond="00"
-    elif [ $charCount == 5 ]; then              ##  Hour and minute
-        alarmHour=$(echo $1 | cut -b1,2)
-        alarmMinute=$(echo $1 | cut -b3,4)
-        alarmSecond="00"
-    elif [ $charCount == 7 ]; then              ##  Hour, minute and second
-        alarmHour=$(echo $1 | cut -b1,2)
-        alarmMinute=$(echo $1 | cut -b3,4)
-        alarmSecond=$(echo $1 | cut -b5,6)
+    if alarmTimeUnix=$(date -d "$1" +%s); then
+
+        # Try to add 1 day if alarm time is too early
+        if [[ "$alarmTimeUnix" -lt "$currentTimeUnix" ]]; then
+            (( alarmTimeUnix += 24 * 60 * 60 ))
+        fi
+
+        if [[ "$alarmTimeUnix" -lt "$currentTimeUnix" ]]; then
+            echo "Error:  Alarm is set to: $(date -d "$1")" 1>&2
+            echo " ...... Which is earlier than now: $(date)" 1>&2
+            exit
+        fi
+
+        alarmTime=$(date -d "@$alarmTimeUnix" +'%H:%M:%S')
     else
         print_time_error
         exit
     fi
-
-    ##  Check to make sure that the hour, minute and second values are all
-    ##  within acceptable boundaries
-    ### Alarm value
-    if [ $alarmHour -gt 23 ]; then
-        echo "Error:  Hour value too high ($alarmHour):  Maximum is 23" 1>&2
-        exit
-    elif [ $alarmHour -lt 0 ]; then
-        echo "Error:  Hour value too low ($alarmHour):  Minimum is 00" 1>&2
-    fi
-
-    ### Minute value
-    if [ $alarmMinute -gt 59 ]; then
-        echo "Error:  Minute value too high ($alarmMinute):  Maximum is 59" 1>&2
-        exit
-    elif [ $alarmMinute -lt 0 ]; then
-        echo "Error:  Minute value too low ($alarmMinute):  Minimum is 00" 1>&2
-    fi
-
-    ### Second value
-    if [ $alarmSecond -gt 59 ]; then
-        echo "Error:  Second value too high ($alarmSecond):  Maximum is 59" 1>&2
-        exit
-    elif [ $alarmSecond -lt 0 ]; then
-        echo "Error:  Second value too low ($alarmSecond):  Minimum is 00" 1>&2
-    fi
-
-
-    ##  Make sure all of the time digits are of a proper length
-    if [ $(echo $alarmHour | wc -c) -lt 3 ]; then
-        alarmHour="0$alarmHour"
-    fi
-
-    if [ $(echo $alarmMinute | wc -c) -lt 3 ]; then
-        alarmMinute="0$alarmMinute"
-    fi
-
-    if [ $(echo $alarmSecond | wc -c) -lt 3 ]; then
-        alarmSecond="0$alarmSecond"
-    fi
-
 }
 
 
@@ -278,38 +208,9 @@ function set_test_alarm
 {
     ##  Get the current time
     get_current_time
-    
+
     ##  Set the alarm time to five seconds past whatever the current time is
-    alarmHour=$currentHour
-    alarmMinute=$currentMinute
-    alarmSecond=$[ $currentSecond + 5 ]
-
-    ##  See if the time went over
-    if [ $alarmSecond -gt 59 ]; then
-        let alarmSecond-=59
-        let alarmMinute+=1
-    fi
-    if [ $alarmMinute -gt 59 ]; then
-        let alarmMinute-=59
-        let alarmHour+=1
-    fi
-    if [ $alarmHour == "24" ]; then
-        alarmHour="00"
-    fi
-
-
-    ##  Make sure all of the time digits are of a proper length
-    if [ $(echo $alarmHour | wc -c) -lt 3 ]; then
-        alarmHour="0$alarmHour"
-    fi
-
-    if [ $(echo $alarmMinute | wc -c) -lt 3 ]; then
-        alarmMinute="0$alarmMinute"
-    fi
-
-    if [ $(echo $alarmSecond | wc -c) -lt 3 ]; then
-        alarmSecond="0$alarmSecond"
-    fi
+    set_alarm_time "+5 sec"
 
 }
 
@@ -321,19 +222,7 @@ function add_snooze_interval
 {
     get_current_time
 
-    ##  Get total number of seconds
-    alarmSeconds=$(( ($currentHour * 60 * 60) + ($currentMinute * 60 ) ))
-    let alarmSeconds=$(( $alarmSeconds + $currentSecond + $snooze ))
-
-    ##  Adjust if necessary (86400 == seconds in a day)
-    while [[ $alarmSeconds -gt 86399 ]]; do
-        let alarmSeconds=$(( $alarmSeconds - 86400 ))
-    done
-
-    ##  Translate back into something usable
-    alarmHour="$( printf %02d $(( $alarmSeconds / 3600 )) )"
-    alarmMinute="$( printf %02d $(( ($alarmSeconds / 60) % 60 )) )"
-    alarmSecond="$( printf %02d $(( $alarmSeconds % 60 )) )"
+    set_alarm_time "+$snooze sec"
 
 }
 
@@ -400,11 +289,6 @@ function start_snoozing
 
     ##  Add the snooze interval
     add_snooze_interval
-
-    ##  Re-prime alarm timeout
-    if [[ $alarmTimeout -gt 0 ]]; then
-        prime_timeout
-    fi
 }
 
 
@@ -415,66 +299,9 @@ function alarm_check
     ##  Fetch the current system time
     get_current_time
 
-    ##  We're going to check the current second and current second + 1 against
-    ##  the 'alarm second', just to be safe
-    cs1=$currentSecond
-    cs2=$[ $currentSecond + 1 ]
-
-    ##  Make sure that cs1 and cs2 don't roll over past 59
-    if [ $cs1 -gt 59 ]; then
-        cs1=0
-    fi
-
-    if [ $cs2 -gt 59 ]; then
-        cs2=0
-    fi
-
-
-    ##  Check the lengths, again
-    if [ $(echo $alarmHour | wc -c) -lt 3 ]; then
-        alarmHour="0$alarmHour"
-    fi
-
-    if [ $(echo $alarmMinute | wc -c) -lt 3 ]; then
-        alarmMinute="0$alarmMinute"
-    fi
-
-    if [ $(echo $alarmSecond | wc -c) -lt 3 ]; then
-        alarmSecond="0$alarmSecond"
-    fi
-
-
-    ##  Check the current alarm time lengths
-    if [ $(echo $currentHour | wc -c) -lt 3 ]; then
-        currentHour="0$currentHour"
-    fi
-
-    if [ $(echo $currentMinute | wc -c) -lt 3 ]; then
-        currentMinute="0$currentMinute"
-    fi
-
-    if [ $(echo $currentSecond | wc -c) -lt 3 ]; then
-        currentSecond="0$currentSecond"
-    fi
-
-
-    ##  Check the lengths of cs1 and cs2
-    if [ $(echo $cs1 | wc -c) -lt 3 ]; then
-        cs1="0$cs1"
-    fi
-
-    if [ $(echo $cs2 | wc -c) -lt 3 ]; then
-        cs2="0$cs2"
-    fi
-
-
     ##  If the current time is equal to the alarm time, set the alarm to ring
-    if [ $alarmHour -eq $currentHour ]; then
-        if [ $alarmMinute == $currentMinute ]; then
-            if [ $alarmSecond == $cs1 ] || [ $alarmSecond == $cs2 ]; then
-                ringTheAlarm=1
-            fi
-        fi
+    if [ "$alarmTimeUnix" -eq "$currentTimeUnix" ]; then
+        ringTheAlarm=1
     fi
 
     ##  If the ringTheAlarm variable is set to 1, ring the alarm
@@ -495,14 +322,12 @@ function print_usage
 function print_help
 {
     echo -e "Usage:  shalarm TIME\n"
-    echo -e "TIME is a 24-hr formatted time string."
+    echo -e "TIME is a time string, parsed by \`date -d\`."
     echo -e "For example, ten PM may be formatted as follows:\n"
     echo -e "   22:00:00"
     echo -e "   22:00"
     echo -e "   22"
-    echo -e "   22.00.00"
-    echo -e "   2200"
-    echo -e "   220000\n"
+    echo -e "   2200\n"
     echo -e "As an aside, formatting it as '10:00' will get you ten AM, and"
     echo -e "'10 pm' won't work.\n"
     echo -e "Arguments:"
@@ -541,7 +366,7 @@ function print_debug_info
         echo -e "PrintAlarmMessage:\t\tNo"
     fi
     echo -e "Message:\t\t\t$alarmMessage"
-    
+
     ##  Check for the existence of /etc/shalarm.cfg and report
     echo -n "/etc/shalarm.cfg:  "
     if [ -e "/etc/shalarm.cfg" ]; then
@@ -675,40 +500,17 @@ function set_options
 }
 
 
-function prime_timeout
-{
-    ##  Turn these babies into integers
-    ah=$(echo "$alarmHour" | bc)
-    am=$(echo "$alarmMinute" | bc)
-    as=$(echo "$alarmSecond" | bc)
-
-    ##  Get total seconds again
-    alarmSeconds=$(( ($ah * 60 * 60) + ($am * 60) + $as ))
-
-    ##  Set the timeout seconds
-    let timeoutSeconds=$(( $alarmSeconds + $alarmTimeout ))
-
-    ##  Get usable time from timeout seconds
-    timeoutHour=$(( $timeoutSeconds / 3600 ))
-    timeoutMinute=$(( ($timeoutSeconds / 60) % 60 ))
-    timeoutSecond=$(( $timeoutSeconds % 60 ))
-}
-
 function timeout_check
 {
     ##  Get the current time
     get_current_time
 
     ##  Check for timeout
-    if [[ "$currentHour" = "$timeoutHour" ]]; then
-        if [[ "$currentMinute" = "$timeoutMinute" ]]; then
-            if [[ "$currentSecond" = "$timeoutSecond" ]]; then
-                kill $mediaPlayerPID
-                echo "Alarm timeout reached ($alarmTimeout seconds)"
-                echo "Exiting"
-                exit 0
-            fi
-        fi
+    if [[ $(( currentTimeUnix - alarmTimeUnix )) -gt $alarmTimeout ]]; then
+        kill $mediaPlayerPID
+        echo "Alarm timeout reached ($alarmTimeout seconds)"
+        echo "Exiting"
+        exit 0
     fi
 
 }
@@ -816,8 +618,7 @@ else
         print_debug_info
         exit
     else
-        parse_alarm_string $1
-        set_alarm_time $alarmString
+        set_alarm_time "$1"
     fi
 fi
 
@@ -852,19 +653,14 @@ fi
 
 ##  Tell the user what's up
 if [ $testAlarm == 1 ]; then
-    echo -e "\nTest alarm is ACTIVE ($alarmHour:$alarmMinute:$alarmSecond)"
+    echo -e "\nTest alarm is ACTIVE ($(date -d "@$alarmTimeUnix"))"
 else
-    echo -e "\nAlarm is ACTIVE and set to $alarmHour:$alarmMinute:$alarmSecond"
+    echo -e "\nAlarm is ACTIVE and set to $(date -d "@$alarmTimeUnix")"
 fi
 
 ##  Print how much time is left until the alarm
 get_current_time
-leastSecond=$(( (10#$alarmHour - $currentHour) * 60 * 60 + \
-                (10#$alarmMinute - $currentMinute) * 60 + \
-                (10#$alarmSecond - $currentSecond) ))
-if [[ $leastSecond -lt 0 ]]; then
-    leastSecond=$(( $leastSecond + 60 * 60 * 24 ))
-fi
+leastSecond=$(( alarmTimeUnix - currentTimeUnix ))
 leastHour=$(( $leastSecond / (60 * 60) ))
 leastSecond=$(( $leastSecond - $leastHour * (60 * 60) ))
 leastMinute=$(( $leastSecond / 60 ))
@@ -897,17 +693,6 @@ if [[ $snooze -gt 0 ]]; then
     echo -e "CTRL-C once to snooze, twice to quit\n"
 fi
 
-
-
-##  Timeout stuff
-if [[ $alarmTimeout -gt 0 ]]; then
-    ##  Variables
-    timeoutHour=""
-    timeoutMinute=""
-    timeoutSecond=""
-    timeoutSeconds=0
-    prime_timeout
-fi
 
 
 ##  Do an alarm check every $checkInterval seconds (1 by default)
