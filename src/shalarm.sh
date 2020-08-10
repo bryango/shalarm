@@ -161,8 +161,8 @@ function control_c
 function get_current_time
 {
     ##  Get the current time
-    currentTimeUnix=$(date +%s)
-    currentTime=$(date -d "@$currentTimeUnix" +'%H:%M:%S')
+    currentTimeUnix=${EPOCHREALTIME%.*}
+    # currentTime=$(date -d "@$currentTimeUnix" +'%H:%M:%S')
 }
 
 
@@ -693,6 +693,13 @@ if [[ $snooze -gt 0 ]]; then
     echo -e "CTRL-C once to snooze, twice to quit\n"
 fi
 
+
+## Avoid fork if we can use bash builtin
+## See: <https://unix.stackexchange.com/q/68236>
+
+function sleep {
+    read -t "$1" <> <(:)
+}
 
 
 ##  Do an alarm check every $checkInterval seconds (1 by default)
